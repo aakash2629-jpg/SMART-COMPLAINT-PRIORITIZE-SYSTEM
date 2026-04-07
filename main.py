@@ -105,27 +105,48 @@ DISTRESS_PHRASES: list[tuple[str, int]] = [
 HIGH_SOLO_FLOOR  = 8   # one word with weight ≥ 8 → always High
 HIGH_THRESHOLD   = 9   # cumulative score for High
 MED_THRESHOLD    = 4   # cumulative score for Medium
-FUZZY_THRESHOLD  = 85  # catches "bulleid", "harrasment", "voilence"
+FUZZY_THRESHOLD  = 80  # lowered from 85 — catches more real typos safely
 MIN_TOKEN_LEN    = 3   # skip very short tokens to reduce false positives
 
 
 # ================================================================
 # SUFFIX LIST FOR STEMMER
+#
+# ⚠️  "ly" is intentionally EXCLUDED.
+#     Reason: "bully".endswith("ly") → strips to "bul", which then
+#     fails to fuzzy-match "bullied" → "bulli" (similarity ~66%).
+#     Removing "ly" keeps "bully" intact as its own root.
+#
 # Ordered longest-first so "tion" strips before "on" would.
 # ================================================================
-SUFFIXES = ["tion", "ment", "ing", "ers", "ed", "er", "ly", "s"]
+SUFFIXES = ["tion", "ment", "ing", "ers", "ied", "ed", "er", "s"]
+#                                         ^^^
+#                   "ied" must come BEFORE "ed" so "bullied" → "bull"
+#                   then we re-attach "y" in the special-case below.
 
 
 def simple_stem(word: str) -> str:
     """
     Strip one common suffix to approximate the root form.
+
+    Special case: words ending in "ied" (bullied, terrified, petrified)
+    map to their "-y" root (bully, terrify, petrify) — NOT to the bare
+    stem — because that's what the keyword dict stores.
+
     Examples:
-        bullying  → bully
-        harassed  → harass
-        violently → violent
-        threats   → threat
+        bullied   → bully      (ied → y)
+        bullying  → bull       (ing stripped)
+        harassed  → harass     (ed stripped)
+        threats   → threat     (s stripped)
+        bully     → bully      (no suffix matched — returned as-is)
+        violently → violently  ("ly" not in list — returned as-is,
+                                fuzzy still matches "violence" fine)
     Keeps at least 3 characters after stripping.
     """
+    # Special case: -ied → -y  (e.g. bullied → bully)
+    if word.endswith("ied") and len(word) - 3 >= 3:
+        return word[:-3] + "y"
+
     for suffix in SUFFIXES:
         if word.endswith(suffix) and len(word) - len(suffix) >= 3:
             return word[: -len(suffix)]
