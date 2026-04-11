@@ -1,8 +1,10 @@
 import streamlit as st
 from datetime import datetime
+import pandas as pd
+import plotly.express as px
 
 # -------------------------------
-# 🔐 Simple Admin Login
+# 🔐 Admin Login Credentials
 # -------------------------------
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "1234"
@@ -45,6 +47,9 @@ def detect_risk(complaint):
 # -------------------------------
 if "complaints" not in st.session_state:
     st.session_state.complaints = []
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
 # -------------------------------
 # ➕ Add Complaint
@@ -93,19 +98,19 @@ if page == "Complaint Page":
 elif page == "Admin Page":
     st.title("🔐 Admin Login")
 
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+    if not st.session_state.logged_in:
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
 
-    if st.button("Login"):
-        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
-            st.session_state.logged_in = True
-        else:
-            st.error("Invalid credentials")
+        if st.button("Login"):
+            if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+                st.session_state.logged_in = True
+                st.success("Logged in successfully")
+            else:
+                st.error("Invalid credentials")
 
-    if st.session_state.get("logged_in"):
-        st.success("Logged in successfully")
-
-        st.subheader("📊 Complaints Dashboard")
+    if st.session_state.logged_in:
+        st.subheader("📋 Complaints Dashboard")
 
         sorted_complaints = get_sorted_complaints()
 
@@ -119,14 +124,64 @@ elif page == "Admin Page":
                 st.write("---")
 
         # -------------------------------
-        # 📊 Simple Analytics
+        # 📊 Analytics (PLOTLY)
         # -------------------------------
         st.subheader("📈 Analytics")
 
-        high = sum(1 for c in sorted_complaints if "High" in c["risk"])
-        medium = sum(1 for c in sorted_complaints if "Medium" in c["risk"])
-        low = sum(1 for c in sorted_complaints if "Low" in c["risk"])
+        if len(sorted_complaints) > 0:
 
-        st.write(f"🔴 High Risk: {high}")
-        st.write(f"🟡 Medium Risk: {medium}")
-        st.write(f"🟢 Low Risk: {low}")
+            df = pd.DataFrame(sorted_complaints)
+
+            # clean risk labels (remove emojis)
+            df["risk_clean"] = df["risk"].str.replace("🔴|🟡|🟢", "", regex=True).str.strip()
+
+            # -----------------------
+            # 📊 BAR CHART
+            # -----------------------
+            st.subheader("📊 Risk Distribution")
+            bar_fig = px.bar(
+                df,
+                x="risk_clean",
+                color="risk_clean",
+                title="Complaint Risk Levels"
+            )
+            st.plotly_chart(bar_fig, use_container_width=True)
+
+            # -----------------------
+            # 🥧 PIE CHART
+            # -----------------------
+            st.subheader("🥧 Risk Percentage")
+            pie_fig = px.pie(
+                df,
+                names="risk_clean",
+                title="Risk Distribution"
+            )
+            st.plotly_chart(pie_fig, use_container_width=True)
+
+            # -----------------------
+            # 📈 TIME TREND (BONUS 🔥)
+            # -----------------------
+            st.subheader("📈 Complaints Over Time")
+
+            df["time"] = pd.to_datetime(df["time"])
+            df["date"] = df["time"].dt.date
+
+            trend = df.groupby("date").size().reset_index(name="count")
+
+            line_fig = px.line(
+                trend,
+                x="date",
+                y="count",
+                markers=True,
+                title="Complaints Trend"
+            )
+            st.plotly_chart(line_fig, use_container_width=True)
+
+        else:
+            st.info("No data for analytics")
+
+        # -------------------------------
+        # 🚪 Logout
+        # -------------------------------
+        if st.button("Logout"):
+            st.session_state.logged_in = False
