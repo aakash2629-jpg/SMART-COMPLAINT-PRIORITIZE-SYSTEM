@@ -12,8 +12,13 @@ ADMIN_PASSWORD = "1234"
 # -------------------------------
 # 🧠 Risk Keywords
 # -------------------------------
-high_risk_keywords = ["bullying", "harassment", "fight", "abuse", "danger", "threat"]
+high_risk_keywords = [
+    "bullying", "harassment", "fight", "abuse", "danger", "threat",
+    "suicide", "kill myself", "self harm", "die", "end my life"
+]
+
 medium_risk_keywords = ["argument", "issue", "problem", "complaint", "delay"]
+
 low_risk_keywords = ["fan", "light", "clean", "water", "maintenance"]
 
 # -------------------------------
@@ -21,23 +26,25 @@ low_risk_keywords = ["fan", "light", "clean", "water", "maintenance"]
 # -------------------------------
 def detect_risk(complaint):
     complaint = complaint.lower()
-    score = 0
 
+    # 🔴 HIGH RISK (instant trigger)
     for word in high_risk_keywords:
         if word in complaint:
-            score += 3
+            return "High Risk 🔴", 5
 
+    score = 0
+
+    # 🟡 MEDIUM
     for word in medium_risk_keywords:
         if word in complaint:
             score += 2
 
+    # 🟢 LOW
     for word in low_risk_keywords:
         if word in complaint:
             score += 1
 
-    if score >= 3:
-        return "High Risk 🔴", score
-    elif score == 2:
+    if score >= 2:
         return "Medium Risk 🟡", score
     else:
         return "Low Risk 🟢", score
@@ -132,12 +139,10 @@ elif page == "Admin Page":
 
             df = pd.DataFrame(sorted_complaints)
 
-            # clean risk labels (remove emojis)
+            # clean risk labels
             df["risk_clean"] = df["risk"].str.replace("🔴|🟡|🟢", "", regex=True).str.strip()
 
-            # -----------------------
-            # 📊 BAR CHART
-            # -----------------------
+            # 📊 Bar Chart
             st.subheader("📊 Risk Distribution")
             bar_fig = px.bar(
                 df,
@@ -147,9 +152,7 @@ elif page == "Admin Page":
             )
             st.plotly_chart(bar_fig, use_container_width=True)
 
-            # -----------------------
-            # 🥧 PIE CHART
-            # -----------------------
+            # 🥧 Pie Chart
             st.subheader("🥧 Risk Percentage")
             pie_fig = px.pie(
                 df,
@@ -158,9 +161,7 @@ elif page == "Admin Page":
             )
             st.plotly_chart(pie_fig, use_container_width=True)
 
-            # -----------------------
-            # 📈 TIME TREND (BONUS 🔥)
-            # -----------------------
+            # 📈 Time Trend
             st.subheader("📈 Complaints Over Time")
 
             df["time"] = pd.to_datetime(df["time"])
