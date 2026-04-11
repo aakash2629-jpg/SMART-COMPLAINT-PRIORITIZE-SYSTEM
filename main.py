@@ -2,15 +2,16 @@ import streamlit as st
 from datetime import datetime
 import pandas as pd
 import plotly.express as px
+from rapidfuzz import fuzz
 
 # -------------------------------
-# 🔐 Admin Login Credentials
+# 🔐 Admin Login
 # -------------------------------
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "1234"
 
 # -------------------------------
-# 🧠 Risk Keywords
+# 🧠 Keywords
 # -------------------------------
 high_risk_keywords = [
     "bullying", "harassment", "fight", "abuse", "danger", "threat",
@@ -22,26 +23,36 @@ medium_risk_keywords = ["argument", "issue", "problem", "complaint", "delay"]
 low_risk_keywords = ["fan", "light", "clean", "water", "maintenance"]
 
 # -------------------------------
-# 🧠 Risk Detection Function
+# 🧠 RapidFuzz Match Function
+# -------------------------------
+def is_match(word, keyword_list):
+    for keyword in keyword_list:
+        score = fuzz.ratio(word, keyword)
+        if score > 80:  # similarity threshold
+            return True
+    return False
+
+# -------------------------------
+# 🧠 Risk Detection
 # -------------------------------
 def detect_risk(complaint):
-    complaint = complaint.lower()
+    words = complaint.lower().split()
 
-    # 🔴 HIGH RISK (instant trigger)
-    for word in high_risk_keywords:
-        if word in complaint:
+    # 🔴 HIGH RISK (priority)
+    for word in words:
+        if is_match(word, high_risk_keywords):
             return "High Risk 🔴", 5
 
     score = 0
 
     # 🟡 MEDIUM
-    for word in medium_risk_keywords:
-        if word in complaint:
+    for word in words:
+        if is_match(word, medium_risk_keywords):
             score += 2
 
     # 🟢 LOW
-    for word in low_risk_keywords:
-        if word in complaint:
+    for word in words:
+        if is_match(word, low_risk_keywords):
             score += 1
 
     if score >= 2:
@@ -50,7 +61,7 @@ def detect_risk(complaint):
         return "Low Risk 🟢", score
 
 # -------------------------------
-# 📦 Session Storage
+# 📦 Storage
 # -------------------------------
 if "complaints" not in st.session_state:
     st.session_state.complaints = []
@@ -64,19 +75,19 @@ if "logged_in" not in st.session_state:
 def add_complaint(text):
     risk, score = detect_risk(text)
 
-    complaint_data = {
+    data = {
         "text": text,
         "risk": risk,
         "score": score,
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
 
-    st.session_state.complaints.append(complaint_data)
+    st.session_state.complaints.append(data)
 
 # -------------------------------
-# 🔽 Sort Complaints
+# 🔽 Sort
 # -------------------------------
-def get_sorted_complaints():
+def get_sorted():
     return sorted(st.session_state.complaints, key=lambda x: x["score"], reverse=True)
 
 # -------------------------------
@@ -90,14 +101,14 @@ page = st.sidebar.selectbox("Select Page", ["Complaint Page", "Admin Page"])
 if page == "Complaint Page":
     st.title("📝 Complaint Submission")
 
-    complaint_text = st.text_area("Enter your complaint")
+    text = st.text_area("Enter your complaint")
 
     if st.button("Submit Complaint"):
-        if complaint_text.strip() == "":
-            st.warning("Please enter a complaint")
+        if text.strip() == "":
+            st.warning("Enter something da")
         else:
-            add_complaint(complaint_text)
-            st.success("Complaint submitted successfully!")
+            add_complaint(text)
+            st.success("Complaint submitted")
 
 # ===============================
 # 🔐 Admin Page
@@ -106,83 +117,54 @@ elif page == "Admin Page":
     st.title("🔐 Admin Login")
 
     if not st.session_state.logged_in:
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        u = st.text_input("Username")
+        p = st.text_input("Password", type="password")
 
         if st.button("Login"):
-            if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+            if u == ADMIN_USERNAME and p == ADMIN_PASSWORD:
                 st.session_state.logged_in = True
-                st.success("Logged in successfully")
+                st.success("Logged in")
             else:
-                st.error("Invalid credentials")
+                st.error("Wrong credentials")
 
     if st.session_state.logged_in:
         st.subheader("📋 Complaints Dashboard")
 
-        sorted_complaints = get_sorted_complaints()
+        data = get_sorted()
 
-        if len(sorted_complaints) == 0:
-            st.info("No complaints yet")
+        if not data:
+            st.info("No complaints")
         else:
-            for c in sorted_complaints:
+            for c in data:
                 st.write(f"🕒 {c['time']}")
                 st.write(f"📌 {c['text']}")
                 st.write(f"⚠️ {c['risk']}")
                 st.write("---")
 
         # -------------------------------
-        # 📊 Analytics (PLOTLY)
+        # 📊 Analytics (Plotly)
         # -------------------------------
         st.subheader("📈 Analytics")
 
-        if len(sorted_complaints) > 0:
-
-            df = pd.DataFrame(sorted_complaints)
-
-            # clean risk labels
+        if data:
+            df = pd.DataFrame(data)
             df["risk_clean"] = df["risk"].str.replace("🔴|🟡|🟢", "", regex=True).str.strip()
 
-            # 📊 Bar Chart
-            st.subheader("📊 Risk Distribution")
-            bar_fig = px.bar(
-                df,
-                x="risk_clean",
-                color="risk_clean",
-                title="Complaint Risk Levels"
-            )
-            st.plotly_chart(bar_fig, use_container_width=True)
+            # Bar
+            fig1 = px.bar(df, x="risk_clean", color="risk_clean", title="Risk Levels")
+            st.plotly_chart(fig1, use_container_width=True)
 
-            # 🥧 Pie Chart
-            st.subheader("🥧 Risk Percentage")
-            pie_fig = px.pie(
-                df,
-                names="risk_clean",
-                title="Risk Distribution"
-            )
-            st.plotly_chart(pie_fig, use_container_width=True)
+            # Pie
+            fig2 = px.pie(df, names="risk_clean", title="Risk Distribution")
+            st.plotly_chart(fig2, use_container_width=True)
 
-            # 📈 Time Trend
-            st.subheader("📈 Complaints Over Time")
-
+            # Trend
             df["time"] = pd.to_datetime(df["time"])
             df["date"] = df["time"].dt.date
-
             trend = df.groupby("date").size().reset_index(name="count")
 
-            line_fig = px.line(
-                trend,
-                x="date",
-                y="count",
-                markers=True,
-                title="Complaints Trend"
-            )
-            st.plotly_chart(line_fig, use_container_width=True)
+            fig3 = px.line(trend, x="date", y="count", markers=True, title="Trend")
+            st.plotly_chart(fig3, use_container_width=True)
 
-        else:
-            st.info("No data for analytics")
-
-        # -------------------------------
-        # 🚪 Logout
-        # -------------------------------
         if st.button("Logout"):
             st.session_state.logged_in = False
