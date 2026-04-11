@@ -23,36 +23,35 @@ medium_risk_keywords = ["argument", "issue", "problem", "complaint", "delay"]
 low_risk_keywords = ["fan", "light", "clean", "water", "maintenance"]
 
 # -------------------------------
-# 🧠 RapidFuzz Match Function
-# -------------------------------
-def is_match(word, keyword_list):
-    for keyword in keyword_list:
-        score = fuzz.ratio(word, keyword)
-        if score > 80:  # similarity threshold
-            return True
-    return False
-
-# -------------------------------
-# 🧠 Risk Detection
+# 🧠 Risk Detection (FINAL FIX)
 # -------------------------------
 def detect_risk(complaint):
-    words = complaint.lower().split()
+    text = complaint.lower()
 
-    # 🔴 HIGH RISK (priority)
-    for word in words:
-        if is_match(word, high_risk_keywords):
+    # 🔴 HARD CHECK (guaranteed detection)
+    high_phrases = [
+        "suicide", "sucide", "kill myself", "end my life",
+        "self harm", "die", "want to die"
+    ]
+
+    for phrase in high_phrases:
+        if phrase in text:
             return "High Risk 🔴", 5
 
-    score = 0
+    # 🔴 FUZZY BACKUP
+    for keyword in high_risk_keywords:
+        if fuzz.partial_ratio(text, keyword) > 80:
+            return "High Risk 🔴", 5
 
     # 🟡 MEDIUM
-    for word in words:
-        if is_match(word, medium_risk_keywords):
+    score = 0
+    for keyword in medium_risk_keywords:
+        if keyword in text:
             score += 2
 
     # 🟢 LOW
-    for word in words:
-        if is_match(word, low_risk_keywords):
+    for keyword in low_risk_keywords:
+        if keyword in text:
             score += 1
 
     if score >= 2:
@@ -85,7 +84,7 @@ def add_complaint(text):
     st.session_state.complaints.append(data)
 
 # -------------------------------
-# 🔽 Sort
+# 🔽 Sort (AUTO SORTING)
 # -------------------------------
 def get_sorted():
     return sorted(st.session_state.complaints, key=lambda x: x["score"], reverse=True)
@@ -133,7 +132,7 @@ elif page == "Admin Page":
         data = get_sorted()
 
         if not data:
-            st.info("No complaints")
+            st.info("No complaints yet")
         else:
             for c in data:
                 st.write(f"🕒 {c['time']}")
@@ -142,28 +141,28 @@ elif page == "Admin Page":
                 st.write("---")
 
         # -------------------------------
-        # 📊 Analytics (Plotly)
+        # 📊 Plotly Visuals
         # -------------------------------
-        st.subheader("📈 Analytics")
+        st.subheader("📈 Analytics Dashboard")
 
         if data:
             df = pd.DataFrame(data)
             df["risk_clean"] = df["risk"].str.replace("🔴|🟡|🟢", "", regex=True).str.strip()
 
-            # Bar
+            # 📊 Bar Chart
             fig1 = px.bar(df, x="risk_clean", color="risk_clean", title="Risk Levels")
             st.plotly_chart(fig1, use_container_width=True)
 
-            # Pie
+            # 🥧 Pie Chart
             fig2 = px.pie(df, names="risk_clean", title="Risk Distribution")
             st.plotly_chart(fig2, use_container_width=True)
 
-            # Trend
+            # 📈 Trend
             df["time"] = pd.to_datetime(df["time"])
             df["date"] = df["time"].dt.date
             trend = df.groupby("date").size().reset_index(name="count")
 
-            fig3 = px.line(trend, x="date", y="count", markers=True, title="Trend")
+            fig3 = px.line(trend, x="date", y="count", markers=True, title="Complaint Trend")
             st.plotly_chart(fig3, use_container_width=True)
 
         if st.button("Logout"):
